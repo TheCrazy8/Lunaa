@@ -5,6 +5,6 @@ import random
 import datetime
 import tkinter as tk
 import tkinter.ttk as ttk
-import pytorch
+import ollama
 import sv-ttk
 import numpy
