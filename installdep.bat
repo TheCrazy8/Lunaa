@@ -1,1 +1,1 @@
-pip install tensorflow transformers numpy pandas datasets
+pip install transformers numpy pandas datasets torch torchvision tqdm
