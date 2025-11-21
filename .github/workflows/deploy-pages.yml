@@ -1,0 +1,122 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create web documentation
+      run: |
+        mkdir -p _site
+        cat > _site/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Lunaa AI</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background: #1a1a1a;
+                    color: #f0f0f0;
+                }
+                h1 { color: #4a9eff; }
+                h2 { color: #6ab7ff; }
+                code {
+                    background: #2a2a2a;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                }
+                .command { 
+                    background: #2a2a2a; 
+                    padding: 10px; 
+                    margin: 10px 0; 
+                    border-left: 3px solid #4a9eff;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Lunaa AI - Enhanced Edition</h1>
+            <p>A powerful AI assistant with enhanced capabilities including memory, vision, audio, and more.</p>
+            
+            <h2>Features</h2>
+            <ul>
+                <li>HuggingFace datasets integration</li>
+                <li>Web search and scraping</li>
+                <li>Vision model for image analysis</li>
+                <li>Audio processing</li>
+                <li>Memory engine</li>
+                <li>Mathematical calculations and graphing</li>
+                <li>Geolocation data</li>
+                <li>File viewing</li>
+                <li>Extension system</li>
+                <li>Command API for external integration</li>
+            </ul>
+            
+            <h2>Commands</h2>
+            <div class="command"><code>/img &lt;prompt&gt; [|| negative]</code> - Generate image</div>
+            <div class="command"><code>/web &lt;url or search&gt;</code> - Web search</div>
+            <div class="command"><code>/vision &lt;path&gt; [question]</code> - Analyze image</div>
+            <div class="command"><code>/math &lt;expression&gt;</code> - Calculate</div>
+            <div class="command"><code>/plot &lt;expression&gt;</code> - Plot function</div>
+            <div class="command"><code>/file &lt;path&gt;</code> - View file</div>
+            <div class="command"><code>/memory add/search/clear</code> - Manage memory</div>
+            <div class="command"><code>/dataset load/query</code> - HuggingFace datasets</div>
+            <div class="command"><code>/geo &lt;address&gt;</code> - Geocode</div>
+            <div class="command"><code>/ext load/unload/list</code> - Extensions</div>
+            
+            <h2>Download</h2>
+            <p>Download the latest release from <a href="https://github.com/TheCrazy8/Lunaa/releases" style="color: #4a9eff;">GitHub Releases</a></p>
+            
+            <h2>Installation</h2>
+            <pre style="background: #2a2a2a; padding: 15px; border-radius: 5px;">
+        git clone https://github.com/TheCrazy8/Lunaa.git
+        cd Lunaa
+        pip install -r requirements.txt
+        python lunaa.py
+            </pre>
+        </body>
+        </html>
+        EOF
+    
+    - name: Setup Pages
+      uses: actions/configure-pages@v3
+    
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: '_site'
+    
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v2

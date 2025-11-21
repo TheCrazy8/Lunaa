@@ -25,6 +25,24 @@ try:
 except Exception:
     _REQUESTS_AVAILABLE = False
 
+# Import new Lunaa modules
+try:
+    from lunaa_modules.memory.memory_engine import MemoryEngine
+    from lunaa_modules.vision.vision_model import VisionModel
+    from lunaa_modules.audio.audio_processor import AudioProcessor
+    from lunaa_modules.data_sources.data_manager import DataSourceManager
+    from lunaa_modules.context.context_engine import ContextEngine
+    from lunaa_modules.command_api.api_server import CommandAPI
+    from lunaa_modules.tools.math_engine import MathEngine
+    from lunaa_modules.tools.geolocation import GeolocationEngine
+    from lunaa_modules.tools.file_viewer import FileViewer
+    from lunaa_modules.tools.web_scraper import WebScraper
+    from lunaa_modules.extensions.extension_manager import ExtensionManager
+    _MODULES_AVAILABLE = True
+except ImportError as e:
+    _MODULES_AVAILABLE = False
+    print(f"Warning: Some modules not available: {e}")
+
 # Fixed text model (Ollama)
 TEXT_MODEL = 'gemma3'
 
@@ -63,12 +81,38 @@ def check_sd(timeout=4):
 
 
 def main():
-    """Tkinter chat UI with fixed text model (gemma3), external Stable Diffusion (/img), /web fetch, and SD autostart."""
+    """Tkinter chat UI with enhanced features: memory, vision, audio, data sources, and more."""
     root = tk.Tk()
-    root.title("AI Chat (gemma3 + A1111 + /web)")
+    root.title("Lunaa AI - Enhanced Edition")
+
+    # Initialize enhanced modules
+    if _MODULES_AVAILABLE:
+        memory_engine = MemoryEngine()
+        vision_model = VisionModel()
+        audio_processor = AudioProcessor()
+        data_manager = DataSourceManager()
+        context_engine = ContextEngine()
+        command_api = CommandAPI()
+        math_engine = MathEngine()
+        geo_engine = GeolocationEngine()
+        file_viewer = FileViewer()
+        web_scraper = WebScraper()
+        extension_manager = ExtensionManager()
+    else:
+        memory_engine = None
+        vision_model = None
+        audio_processor = None
+        data_manager = None
+        context_engine = None
+        command_api = None
+        math_engine = None
+        geo_engine = None
+        file_viewer = None
+        web_scraper = None
+        extension_manager = None
 
     history_lock = threading.Lock()
-    messages = [{'role': 'system', 'content': "You are a helpful AI assistant. You may be given fetched web excerpts labeled 'WEB EXCERPT' to ground answers."}]
+    messages = [{'role': 'system', 'content': "You are Lunaa, a helpful AI assistant with enhanced capabilities including memory, vision, file viewing, mathematics, geolocation, and more. You may be given fetched web excerpts labeled 'WEB EXCERPT' to ground answers."}]
 
     # --- Top bar ---
     top_frame = ttk.Frame(root, padding=(10, 10, 10, 0))
@@ -413,6 +457,14 @@ def main():
         with history_lock:
             messages.append({'role': 'user', 'content': user_msg})
             messages.append({'role': 'assistant', 'content': resp_text})
+        
+        # Add to memory and context if available
+        if _MODULES_AVAILABLE:
+            if memory_engine:
+                memory_engine.add_conversation('assistant', resp_text)
+            if context_engine:
+                context_engine.add_to_context({'role': 'assistant', 'content': resp_text})
+        
         print_history(include_system=False)
         send_btn.configure(state='normal')
         entry.configure(state='normal')
@@ -441,12 +493,226 @@ def main():
         online = check_sd()
         append('[A1111 online]' if online else f'[A1111 offline: {SD_STATUS["last_error"]}]')
 
+    # --- New command handlers for enhanced features ---
+    def handle_vision_command(raw: str):
+        """Handle /vision <image_path> [question]"""
+        if not _MODULES_AVAILABLE or vision_model is None:
+            append('[Vision module not available]')
+            reset_input_state()
+            return
+        
+        parts = raw[len('/vision'):].strip().split(maxsplit=1)
+        if not parts:
+            append('[Usage] /vision <image_path> [question]')
+            reset_input_state()
+            return
+        
+        image_path = parts[0]
+        question = parts[1] if len(parts) > 1 else None
+        
+        def worker():
+            if question:
+                result = vision_model.analyze_image_with_question(image_path, question)
+            else:
+                result = vision_model.analyze_image(image_path)
+            root.after(0, lambda: append(f'[Vision] {result}'))
+            root.after(0, reset_input_state)
+        
+        threading.Thread(target=worker, daemon=True).start()
+    
+    def handle_math_command(raw: str):
+        """Handle /math <expression> or /plot <expression>"""
+        if not _MODULES_AVAILABLE or math_engine is None:
+            append('[Math module not available]')
+            reset_input_state()
+            return
+        
+        if raw.startswith('/plot'):
+            expr = raw[len('/plot'):].strip()
+            if not expr:
+                append('[Usage] /plot <expression>')
+                reset_input_state()
+                return
+            result = math_engine.plot_function(expr)
+            append(f'[Math] {result}')
+        else:
+            expr = raw[len('/math'):].strip()
+            if not expr:
+                append('[Usage] /math <expression>')
+                reset_input_state()
+                return
+            result = math_engine.calculate(expr)
+            append(f'[Math] {result}')
+        reset_input_state()
+    
+    def handle_file_command(raw: str):
+        """Handle /file <path> or /dir <path>"""
+        if not _MODULES_AVAILABLE or file_viewer is None:
+            append('[File viewer module not available]')
+            reset_input_state()
+            return
+        
+        if raw.startswith('/dir'):
+            path = raw[len('/dir'):].strip() or '.'
+            result = file_viewer.list_directory(path)
+        else:
+            path = raw[len('/file'):].strip()
+            if not path:
+                append('[Usage] /file <filepath>')
+                reset_input_state()
+                return
+            result = file_viewer.view_file(path)
+        
+        append(f'[File]\n{result}')
+        reset_input_state()
+    
+    def handle_memory_command(raw: str):
+        """Handle /memory commands"""
+        if not _MODULES_AVAILABLE or memory_engine is None:
+            append('[Memory module not available]')
+            reset_input_state()
+            return
+        
+        parts = raw[len('/memory'):].strip().split(maxsplit=1)
+        if not parts or parts[0] == 'help':
+            append('[Memory Commands] /memory add <fact> | /memory search <query> | /memory clear')
+            reset_input_state()
+            return
+        
+        cmd = parts[0]
+        arg = parts[1] if len(parts) > 1 else ''
+        
+        if cmd == 'add' and arg:
+            memory_engine.add_fact(arg)
+            append(f'[Memory] Fact added: {arg}')
+        elif cmd == 'search' and arg:
+            results = memory_engine.search_facts(arg)
+            if results:
+                append(f'[Memory] Found {len(results)} facts:')
+                for fact in results[:5]:
+                    append(f"  - {fact['fact']}")
+            else:
+                append('[Memory] No matching facts found')
+        elif cmd == 'clear':
+            memory_engine.clear_memory()
+            append('[Memory] Memory cleared')
+        else:
+            append('[Memory] Unknown command. Use /memory help')
+        reset_input_state()
+    
+    def handle_dataset_command(raw: str):
+        """Handle /dataset commands"""
+        if not _MODULES_AVAILABLE or data_manager is None:
+            append('[Data source module not available]')
+            reset_input_state()
+            return
+        
+        parts = raw[len('/dataset'):].strip().split(maxsplit=1)
+        if not parts:
+            append('[Usage] /dataset load <name> | /dataset query <name>')
+            reset_input_state()
+            return
+        
+        cmd = parts[0]
+        arg = parts[1] if len(parts) > 1 else ''
+        
+        if cmd == 'load' and arg:
+            def worker():
+                result = data_manager.load_huggingface_dataset(arg)
+                root.after(0, lambda: append(f'[Dataset] {result}'))
+                root.after(0, reset_input_state)
+            threading.Thread(target=worker, daemon=True).start()
+        elif cmd == 'query' and arg:
+            result = data_manager.query_dataset(arg)
+            append(f'[Dataset]\n{result}')
+            reset_input_state()
+        else:
+            append('[Dataset] Unknown command')
+            reset_input_state()
+    
+    def handle_geo_command(raw: str):
+        """Handle /geo commands"""
+        if not _MODULES_AVAILABLE or geo_engine is None:
+            append('[Geolocation module not available]')
+            reset_input_state()
+            return
+        
+        arg = raw[len('/geo'):].strip()
+        if not arg:
+            append('[Usage] /geo <address>')
+            reset_input_state()
+            return
+        
+        result = geo_engine.geocode(arg)
+        append(f'[Geo] {result}')
+        reset_input_state()
+    
+    def handle_extension_command(raw: str):
+        """Handle /ext commands"""
+        if not _MODULES_AVAILABLE or extension_manager is None:
+            append('[Extension module not available]')
+            reset_input_state()
+            return
+        
+        parts = raw[len('/ext'):].strip().split(maxsplit=1)
+        if not parts:
+            append('[Extensions] /ext load <name> | /ext unload <name> | /ext list')
+            reset_input_state()
+            return
+        
+        cmd = parts[0]
+        arg = parts[1] if len(parts) > 1 else ''
+        
+        if cmd == 'load' and arg:
+            result = extension_manager.load_extension(arg)
+            append(f'[Extension] {result}')
+        elif cmd == 'unload' and arg:
+            result = extension_manager.unload_extension(arg)
+            append(f'[Extension] {result}')
+        elif cmd == 'list':
+            result = extension_manager.list_extensions()
+            append(f'[Extensions]\n{result}')
+        else:
+            append('[Extension] Unknown command')
+        reset_input_state()
+    
+    def handle_context_command(raw: str):
+        """Handle /context command"""
+        if not _MODULES_AVAILABLE or context_engine is None:
+            append('[Context module not available]')
+            reset_input_state()
+            return
+        
+        summary = context_engine.get_context_summary()
+        append(f'[Context] {summary}')
+        reset_input_state()
+
+    def handle_help_command():
+        """Display help information"""
+        append('=== Lunaa AI Commands ===')
+        append('Image: /img <prompt> [|| negative]')
+        append('Vision: /vision <image_path> [question]')
+        append('Web: /web <url or search>')
+        append('Math: /math <expression> or /plot <expression>')
+        append('Files: /file <path> or /dir [path]')
+        append('Memory: /memory add/search/clear <text>')
+        append('Datasets: /dataset load/query <name>')
+        append('Location: /geo <address>')
+        append('Extensions: /ext load/unload/list <name>')
+        append('Context: /context')
+        append('Status: /sdstatus')
+        append('See COMMANDS.md for detailed documentation')
+        reset_input_state()
+
     def send(event=None):
         user_msg = entry_var.get().strip()
         if not user_msg:
             return
         send_btn.configure(state='disabled')
         entry.configure(state='disabled')
+        if user_msg.startswith('/help'):
+            handle_help_command()
+            return
         if user_msg.startswith('/img'):
             handle_image_command(user_msg)
             return
@@ -457,7 +723,45 @@ def main():
             handle_sdstatus()
             reset_input_state()
             return
+        if user_msg.startswith('/vision'):
+            handle_vision_command(user_msg)
+            return
+        if user_msg.startswith('/math'):
+            handle_math_command(user_msg)
+            return
+        if user_msg.startswith('/plot'):
+            handle_math_command(user_msg)
+            return
+        if user_msg.startswith('/file'):
+            handle_file_command(user_msg)
+            return
+        if user_msg.startswith('/dir'):
+            handle_file_command(user_msg)
+            return
+        if user_msg.startswith('/memory'):
+            handle_memory_command(user_msg)
+            return
+        if user_msg.startswith('/dataset'):
+            handle_dataset_command(user_msg)
+            return
+        if user_msg.startswith('/geo'):
+            handle_geo_command(user_msg)
+            return
+        if user_msg.startswith('/ext'):
+            handle_extension_command(user_msg)
+            return
+        if user_msg.startswith('/context'):
+            handle_context_command(user_msg)
+            return
         append(f'You: {user_msg}')
+        
+        # Add to memory and context if available
+        if _MODULES_AVAILABLE:
+            if memory_engine:
+                memory_engine.add_conversation('user', user_msg)
+            if context_engine:
+                context_engine.add_to_context({'role': 'user', 'content': user_msg})
+        
         threading.Thread(target=do_inference, args=(user_msg,), daemon=True).start()
 
     def reset_input_state():
@@ -476,9 +780,22 @@ def main():
     # Initial message
     if not _REQUESTS_AVAILABLE:
         append('Install requests (pip install requests) for /web & /img & SD autostart.')
-    append('Ready. Commands: /img <prompt> [|| negative], /web <url or search>, /sdstatus (check Automatic1111).')
+    
+    append('=== Lunaa AI - Enhanced Edition ===')
+    append('Type /help to see all available commands')
+    append('')
+    append('Quick commands:')
+    append('  /img <prompt> [|| negative] - Generate image')
+    append('  /web <url or search> - Web search')
+    append('  /vision <image_path> - Analyze image')
+    append('  /math <expression> - Calculate')
+    append('  /file <path> - View file')
+    append('  /memory add/search - Memory operations')
+    
     if not _REQUESTS_AVAILABLE:
+        append('')
         append('Install requests: pip install requests')
+    
     entry.focus()
 
     if sv_ttk is not None:

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "lunaa-memory": {
+      "command": "python",
+      "args": ["mcp_tools/memory_server.py"],
+      "description": "Memory management server for Lunaa AI"
+    },
+    "lunaa-vision": {
+      "command": "python",
+      "args": ["mcp_tools/vision_server.py"],
+      "description": "Vision analysis server for Lunaa AI"
+    },
+    "lunaa-files": {
+      "command": "python",
+      "args": ["mcp_tools/file_server.py"],
+      "description": "File operations server for Lunaa AI"
+    }
+  }
+}
