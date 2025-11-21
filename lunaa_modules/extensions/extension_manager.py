@@ -15,20 +15,35 @@ class ExtensionManager:
     
     def load_extension(self, extension_name: str):
         """Load an extension from the extensions directory"""
-        # Validate extension name to prevent path traversal
-        if '..' in extension_name or '/' in extension_name or '\\' in extension_name:
-            return "Invalid extension name"
+        # Validate extension name to prevent path traversal and other attacks
+        # Check for path separators, parent directory references, null bytes
+        if any(char in extension_name for char in ['..', '/', '\\', '\0', '\n', '\r']):
+            return "Invalid extension name: contains unsafe characters"
         
+        # Check for absolute paths
+        if os.path.isabs(extension_name):
+            return "Invalid extension name: absolute paths not allowed"
+        
+        # Normalize the name
+        extension_name = os.path.normpath(extension_name)
+        
+        # Build path
         extension_path = os.path.join(self.extensions_dir, f"{extension_name}.py")
         
         if not os.path.exists(extension_path):
             return f"Extension not found: {extension_name}"
         
-        # Verify file is within extensions directory
+        # Verify file is within extensions directory (resolve symlinks)
         real_path = os.path.realpath(extension_path)
         real_ext_dir = os.path.realpath(self.extensions_dir)
-        if not real_path.startswith(real_ext_dir):
+        
+        # Ensure the real path starts with the extensions directory
+        if not real_path.startswith(real_ext_dir + os.sep) and real_path != real_ext_dir:
             return "Security error: Extension path outside extensions directory"
+        
+        # Verify it's actually a file
+        if not os.path.isfile(real_path):
+            return "Security error: Path is not a file"
         
         try:
             spec = importlib.util.spec_from_file_location(extension_name, extension_path)

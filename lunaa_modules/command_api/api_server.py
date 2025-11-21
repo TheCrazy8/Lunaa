@@ -58,14 +58,21 @@ class CommandAPI:
             # Receive data with size limit
             chunks = []
             bytes_received = 0
-            while bytes_received < self.max_payload_size:
+            while True:
+                # Check size before receiving more data
+                if bytes_received >= self.max_payload_size:
+                    raise ValueError("Payload too large")
+                
                 chunk = conn.recv(4096)
                 if not chunk:
                     break
+                
+                # Check if adding this chunk would exceed limit
+                if bytes_received + len(chunk) > self.max_payload_size:
+                    raise ValueError("Payload too large")
+                
                 chunks.append(chunk)
                 bytes_received += len(chunk)
-                if bytes_received >= self.max_payload_size:
-                    raise ValueError("Payload too large")
             
             data = b''.join(chunks).decode('utf-8')
             
@@ -88,6 +95,12 @@ class CommandAPI:
             
             if not command or not isinstance(command, str):
                 response = {'status': 'error', 'message': 'Invalid command'}
+                conn.sendall(json.dumps(response).encode('utf-8'))
+                return
+            
+            # Validate args is a dictionary
+            if not isinstance(args, dict):
+                response = {'status': 'error', 'message': 'Args must be a dictionary'}
                 conn.sendall(json.dumps(response).encode('utf-8'))
                 return
             

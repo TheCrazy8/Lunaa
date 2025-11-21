@@ -33,25 +33,9 @@ class MathEngine:
             # Parse the expression
             node = ast.parse(expression, mode='eval').body
             return self._eval_node(node, variables or {})
-        except Exception:
-            # Fallback to restricted eval for complex functions
-            safe_dict = {
-                "np": np,
-                "sin": np.sin,
-                "cos": np.cos,
-                "tan": np.tan,
-                "sqrt": np.sqrt,
-                "log": np.log,
-                "exp": np.exp,
-                "pi": np.pi,
-                "e": np.e,
-                "abs": abs,
-            }
-            if variables:
-                safe_dict.update(variables)
-            # Use compile with restricted mode
-            code = compile(expression, "<string>", "eval")
-            return eval(code, {"__builtins__": {}}, safe_dict)
+        except Exception as e:
+            # If AST parsing fails, return error instead of fallback
+            raise ValueError(f"Cannot evaluate expression: {e}")
     
     def _eval_node(self, node, variables):
         """Recursively evaluate AST nodes"""
@@ -61,7 +45,8 @@ class MathEngine:
             if node.id in variables:
                 return variables[node.id]
             # Allow numpy constants
-            if hasattr(np, node.id):
+            allowed_constants = {'pi', 'e'}
+            if node.id in allowed_constants and hasattr(np, node.id):
                 return getattr(np, node.id)
             raise ValueError(f"Unknown variable: {node.id}")
         elif isinstance(node, ast.BinOp):
@@ -76,14 +61,25 @@ class MathEngine:
                 operand = self._eval_node(node.operand, variables)
                 return self.safe_operators[op_type](operand)
         elif isinstance(node, ast.Call):
-            # Allow specific numpy functions
+            # Allow specific numpy functions only from whitelist
             if isinstance(node.func, ast.Name):
                 func_name = node.func.id
-                allowed_funcs = ['sin', 'cos', 'tan', 'sqrt', 'log', 'exp', 'abs']
+                allowed_funcs = {
+                    'sin': np.sin,
+                    'cos': np.cos,
+                    'tan': np.tan,
+                    'sqrt': np.sqrt,
+                    'log': np.log,
+                    'exp': np.exp,
+                    'abs': abs,
+                    'min': min,
+                    'max': max,
+                }
                 if func_name in allowed_funcs:
                     args = [self._eval_node(arg, variables) for arg in node.args]
-                    func = getattr(np, func_name) if hasattr(np, func_name) else globals()[func_name]
-                    return func(*args)
+                    return allowed_funcs[func_name](*args)
+                else:
+                    raise ValueError(f"Function not allowed: {func_name}")
         raise ValueError(f"Unsafe operation: {ast.dump(node)}")
         
     def calculate(self, expression: str):
