@@ -687,12 +687,32 @@ def main():
         append(f'[Context] {summary}')
         reset_input_state()
 
+    def handle_help_command():
+        """Display help information"""
+        append('=== Lunaa AI Commands ===')
+        append('Image: /img <prompt> [|| negative]')
+        append('Vision: /vision <image_path> [question]')
+        append('Web: /web <url or search>')
+        append('Math: /math <expression> or /plot <expression>')
+        append('Files: /file <path> or /dir [path]')
+        append('Memory: /memory add/search/clear <text>')
+        append('Datasets: /dataset load/query <name>')
+        append('Location: /geo <address>')
+        append('Extensions: /ext load/unload/list <name>')
+        append('Context: /context')
+        append('Status: /sdstatus')
+        append('See COMMANDS.md for detailed documentation')
+        reset_input_state()
+
     def send(event=None):
         user_msg = entry_var.get().strip()
         if not user_msg:
             return
         send_btn.configure(state='disabled')
         entry.configure(state='disabled')
+        if user_msg.startswith('/help'):
+            handle_help_command()
+            return
         if user_msg.startswith('/img'):
             handle_image_command(user_msg)
             return
@@ -762,24 +782,18 @@ def main():
         append('Install requests (pip install requests) for /web & /img & SD autostart.')
     
     append('=== Lunaa AI - Enhanced Edition ===')
-    append('Available commands:')
-    append('  /img <prompt> [|| negative] - Generate image with Automatic1111')
-    append('  /web <url or search> - Web search and fetch')
-    append('  /sdstatus - Check Automatic1111 status')
-    
-    if _MODULES_AVAILABLE:
-        append('  /vision <image_path> [question] - Analyze image')
-        append('  /math <expression> - Calculate mathematical expression')
-        append('  /plot <expression> - Plot mathematical function')
-        append('  /file <path> - View file contents')
-        append('  /dir [path] - List directory contents')
-        append('  /memory add/search/clear - Manage memory')
-        append('  /dataset load/query <name> - HuggingFace datasets')
-        append('  /geo <address> - Geocode address')
-        append('  /ext load/unload/list - Manage extensions')
-        append('  /context - View context summary')
+    append('Type /help to see all available commands')
+    append('')
+    append('Quick commands:')
+    append('  /img <prompt> [|| negative] - Generate image')
+    append('  /web <url or search> - Web search')
+    append('  /vision <image_path> - Analyze image')
+    append('  /math <expression> - Calculate')
+    append('  /file <path> - View file')
+    append('  /memory add/search - Memory operations')
     
     if not _REQUESTS_AVAILABLE:
+        append('')
         append('Install requests: pip install requests')
     
     entry.focus()
