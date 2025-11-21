@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 
 block_cipher = None
 
@@ -40,6 +41,9 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Check for icon file
+icon_path = 'icon.ico' if os.path.exists('icon.ico') else None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -56,7 +60,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico' if os.path.exists('icon.ico') else None,
+    icon=icon_path,
 )
 
 coll = COLLECT(

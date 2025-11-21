@@ -18,10 +18,11 @@ def hello_command(name: str = "World"):
     return f"Hello, {name}! This is an example extension."
 
 def calculate_command(expression: str):
-    """Example calculation command"""
+    """Example calculation command - basic arithmetic only"""
     try:
-        result = eval(expression, {"__builtins__": {}}, {})
-        return f"Result: {result}"
+        # Only allow basic arithmetic - no eval for security
+        # For real calculations, use the /math command
+        return f"For calculations, please use the /math command: /math {expression}"
     except Exception as e:
         return f"Error: {e}"
 

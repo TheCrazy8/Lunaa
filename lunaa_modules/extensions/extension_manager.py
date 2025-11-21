@@ -2,6 +2,7 @@
 import os
 import importlib.util
 from typing import Dict, Callable
+import sys
 
 class ExtensionManager:
     def __init__(self, extensions_dir: str = 'extensions'):
@@ -14,20 +15,37 @@ class ExtensionManager:
     
     def load_extension(self, extension_name: str):
         """Load an extension from the extensions directory"""
+        # Validate extension name to prevent path traversal
+        if '..' in extension_name or '/' in extension_name or '\\' in extension_name:
+            return "Invalid extension name"
+        
         extension_path = os.path.join(self.extensions_dir, f"{extension_name}.py")
         
         if not os.path.exists(extension_path):
             return f"Extension not found: {extension_name}"
         
+        # Verify file is within extensions directory
+        real_path = os.path.realpath(extension_path)
+        real_ext_dir = os.path.realpath(self.extensions_dir)
+        if not real_path.startswith(real_ext_dir):
+            return "Security error: Extension path outside extensions directory"
+        
         try:
             spec = importlib.util.spec_from_file_location(extension_name, extension_path)
             module = importlib.util.module_from_spec(spec)
+            
+            # Add to sys.modules to allow proper importing
+            sys.modules[extension_name] = module
             spec.loader.exec_module(module)
             
             # Look for an 'initialize' function in the extension
             if hasattr(module, 'initialize'):
                 commands = module.initialize()
                 if commands:
+                    # Validate commands are callables
+                    for cmd_name, cmd_func in commands.items():
+                        if not callable(cmd_func):
+                            return f"Extension error: {cmd_name} is not callable"
                     self.extension_commands[extension_name] = commands
             
             self.loaded_extensions[extension_name] = module
@@ -41,7 +59,14 @@ class ExtensionManager:
             # Call cleanup if available
             module = self.loaded_extensions[extension_name]
             if hasattr(module, 'cleanup'):
-                module.cleanup()
+                try:
+                    module.cleanup()
+                except Exception as e:
+                    print(f"Extension cleanup error: {e}")
+            
+            # Remove from sys.modules
+            if extension_name in sys.modules:
+                del sys.modules[extension_name]
             
             del self.loaded_extensions[extension_name]
             if extension_name in self.extension_commands:

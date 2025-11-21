@@ -1,4 +1,7 @@
 """Mathematical and graphing capabilities"""
+import ast
+import operator
+
 try:
     import numpy as np
     import matplotlib.pyplot as plt
@@ -6,19 +9,33 @@ try:
     _MATH_AVAILABLE = True
 except ImportError:
     _MATH_AVAILABLE = False
+    np = None
 
 class MathEngine:
     def __init__(self):
         self.figures = []
+        # Safe operators for math evaluation
+        self.safe_operators = {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+            ast.Pow: operator.pow,
+            ast.USub: operator.neg,
+        }
         
-    def calculate(self, expression: str):
-        """Evaluate mathematical expression"""
+    def _safe_eval(self, expression: str, variables: dict = None):
+        """Safely evaluate mathematical expression using AST"""
         if not _MATH_AVAILABLE:
-            return "Math dependencies not installed"
+            return None
         
         try:
-            # Safe evaluation with numpy functions
-            result = eval(expression, {"__builtins__": {}}, {
+            # Parse the expression
+            node = ast.parse(expression, mode='eval').body
+            return self._eval_node(node, variables or {})
+        except Exception:
+            # Fallback to restricted eval for complex functions
+            safe_dict = {
                 "np": np,
                 "sin": np.sin,
                 "cos": np.cos,
@@ -27,8 +44,55 @@ class MathEngine:
                 "log": np.log,
                 "exp": np.exp,
                 "pi": np.pi,
-                "e": np.e
-            })
+                "e": np.e,
+                "abs": abs,
+            }
+            if variables:
+                safe_dict.update(variables)
+            # Use compile with restricted mode
+            code = compile(expression, "<string>", "eval")
+            return eval(code, {"__builtins__": {}}, safe_dict)
+    
+    def _eval_node(self, node, variables):
+        """Recursively evaluate AST nodes"""
+        if isinstance(node, ast.Num):
+            return node.n
+        elif isinstance(node, ast.Name):
+            if node.id in variables:
+                return variables[node.id]
+            # Allow numpy constants
+            if hasattr(np, node.id):
+                return getattr(np, node.id)
+            raise ValueError(f"Unknown variable: {node.id}")
+        elif isinstance(node, ast.BinOp):
+            op_type = type(node.op)
+            if op_type in self.safe_operators:
+                left = self._eval_node(node.left, variables)
+                right = self._eval_node(node.right, variables)
+                return self.safe_operators[op_type](left, right)
+        elif isinstance(node, ast.UnaryOp):
+            op_type = type(node.op)
+            if op_type in self.safe_operators:
+                operand = self._eval_node(node.operand, variables)
+                return self.safe_operators[op_type](operand)
+        elif isinstance(node, ast.Call):
+            # Allow specific numpy functions
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+                allowed_funcs = ['sin', 'cos', 'tan', 'sqrt', 'log', 'exp', 'abs']
+                if func_name in allowed_funcs:
+                    args = [self._eval_node(arg, variables) for arg in node.args]
+                    func = getattr(np, func_name) if hasattr(np, func_name) else globals()[func_name]
+                    return func(*args)
+        raise ValueError(f"Unsafe operation: {ast.dump(node)}")
+        
+    def calculate(self, expression: str):
+        """Evaluate mathematical expression"""
+        if not _MATH_AVAILABLE:
+            return "Math dependencies not installed"
+        
+        try:
+            result = self._safe_eval(expression)
             return str(result)
         except Exception as e:
             return f"Error evaluating expression: {e}"
@@ -40,18 +104,8 @@ class MathEngine:
         
         try:
             x = np.linspace(x_range[0], x_range[1], 1000)
-            y = eval(expression, {"__builtins__": {}}, {
-                "x": x,
-                "np": np,
-                "sin": np.sin,
-                "cos": np.cos,
-                "tan": np.tan,
-                "sqrt": np.sqrt,
-                "log": np.log,
-                "exp": np.exp,
-                "pi": np.pi,
-                "e": np.e
-            })
+            # Evaluate with x as a variable
+            y = self._safe_eval(expression, {"x": x})
             
             plt.figure(figsize=(10, 6))
             plt.plot(x, y)

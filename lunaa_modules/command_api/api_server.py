@@ -10,6 +10,7 @@ class CommandAPI:
         self.commands = {}
         self.running = False
         self.server_thread = None
+        self.max_payload_size = 1024 * 1024  # 1MB max payload
         
     def register_command(self, command_name: str, handler: Callable):
         """Register a command handler"""
@@ -51,10 +52,44 @@ class CommandAPI:
     def _handle_client(self, conn):
         """Handle client connection"""
         try:
-            data = conn.recv(4096).decode('utf-8')
-            request = json.loads(data)
+            # Set receive buffer limit
+            conn.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.max_payload_size)
+            
+            # Receive data with size limit
+            chunks = []
+            bytes_received = 0
+            while bytes_received < self.max_payload_size:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                bytes_received += len(chunk)
+                if bytes_received >= self.max_payload_size:
+                    raise ValueError("Payload too large")
+            
+            data = b''.join(chunks).decode('utf-8')
+            
+            # Validate and parse JSON
+            try:
+                request = json.loads(data)
+            except json.JSONDecodeError:
+                response = {'status': 'error', 'message': 'Invalid JSON'}
+                conn.sendall(json.dumps(response).encode('utf-8'))
+                return
+            
+            # Validate request structure
+            if not isinstance(request, dict):
+                response = {'status': 'error', 'message': 'Request must be a JSON object'}
+                conn.sendall(json.dumps(response).encode('utf-8'))
+                return
+            
             command = request.get('command')
             args = request.get('args', {})
+            
+            if not command or not isinstance(command, str):
+                response = {'status': 'error', 'message': 'Invalid command'}
+                conn.sendall(json.dumps(response).encode('utf-8'))
+                return
             
             if command in self.commands:
                 result = self.commands[command](**args)
@@ -63,8 +98,17 @@ class CommandAPI:
                 response = {'status': 'error', 'message': f'Unknown command: {command}'}
             
             conn.sendall(json.dumps(response).encode('utf-8'))
-        except Exception as e:
+        except ValueError as e:
             error_response = {'status': 'error', 'message': str(e)}
-            conn.sendall(json.dumps(error_response).encode('utf-8'))
+            try:
+                conn.sendall(json.dumps(error_response).encode('utf-8'))
+            except:
+                pass
+        except Exception as e:
+            error_response = {'status': 'error', 'message': 'Internal server error'}
+            try:
+                conn.sendall(json.dumps(error_response).encode('utf-8'))
+            except:
+                pass
         finally:
             conn.close()
