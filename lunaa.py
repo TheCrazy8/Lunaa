@@ -44,7 +44,7 @@ except ImportError as e:
     print(f"Warning: Some modules not available: {e}")
 
 # Fixed text model (Ollama)
-TEXT_MODEL = 'gemma3'
+TEXT_MODEL = 'gemma4:31b'
 
 ###############################################
 # Image Backend: Automatic1111 WebUI
